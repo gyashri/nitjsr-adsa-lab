@@ -100,4 +100,5 @@ int main(int argc, char *argv[]) {
     printf("Result:  %d\n", evaluatePostfix(postfix));
 
     return 0;
+
 }
