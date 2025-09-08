@@ -1,0 +1,184 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+#define ORDER 3   // B+ Tree order (max children per node)
+
+/* Node definition */
+typedef struct BPTreeNode {
+    int keys[ORDER - 1];
+    struct BPTreeNode* children[ORDER];
+    int keyCount;
+    bool isLeaf;
+    struct BPTreeNode* next;  // used only for leaf nodes
+} BPTreeNode;
+
+/* -------- Utility -------- */
+BPTreeNode* createNode(bool isLeaf) {
+    BPTreeNode* node = (BPTreeNode*)malloc(sizeof(BPTreeNode));
+    node->isLeaf = isLeaf;
+    node->keyCount = 0;
+    node->next = NULL;
+    for (int i = 0; i < ORDER; i++) node->children[i] = NULL;
+    return node;
+}
+
+/* -------- 1. createTree -------- */
+BPTreeNode* createTree() {
+    return createNode(true);  // initially an empty leaf
+}
+
+/* -------- Search -------- */
+BPTreeNode* searchItem(BPTreeNode* root, int key, int* idx) {
+    if (root == NULL) return NULL;
+
+    int i = 0;
+    while (i < root->keyCount && key > root->keys[i]) i++;
+
+    if (root->isLeaf) {
+        if (i < root->keyCount && root->keys[i] == key) {
+            if (idx) *idx = i;
+            return root;
+        }
+        return NULL;
+    }
+    return searchItem(root->children[i], key, idx);
+}
+
+/* -------- Split Child -------- */
+void splitChild(BPTreeNode* parent, int idx, BPTreeNode* child) {
+    int mid = (ORDER - 1) / 2;
+
+    BPTreeNode* newChild = createNode(child->isLeaf);
+    newChild->keyCount = (ORDER - 1) - mid;
+
+    for (int i = 0; i < newChild->keyCount; i++) {
+        newChild->keys[i] = child->keys[mid + i];
+    }
+
+    if (!child->isLeaf) {
+        for (int i = 0; i <= newChild->keyCount; i++) {
+            newChild->children[i] = child->children[mid + i];
+        }
+    }
+
+    child->keyCount = mid;
+
+    for (int i = parent->keyCount; i > idx; i--) {
+        parent->children[i + 1] = parent->children[i];
+        parent->keys[i] = parent->keys[i - 1];
+    }
+
+    parent->children[idx + 1] = newChild;
+    parent->keys[idx] = newChild->keys[0];
+    parent->keyCount++;
+
+    if (child->isLeaf) {
+        newChild->next = child->next;
+        child->next = newChild;
+    }
+}
+
+/* -------- Insert NonFull -------- */
+void insertNonFull(BPTreeNode* node, int key) {
+    int i = node->keyCount - 1;
+
+    if (node->isLeaf) {
+        while (i >= 0 && key < node->keys[i]) {
+            node->keys[i + 1] = node->keys[i];
+            i--;
+        }
+        node->keys[i + 1] = key;
+        node->keyCount++;
+    } else {
+        while (i >= 0 && key < node->keys[i]) i--;
+        i++;
+        if (node->children[i]->keyCount == ORDER - 1) {
+            splitChild(node, i, node->children[i]);
+            if (key > node->keys[i]) i++;
+        }
+        insertNonFull(node->children[i], key);
+    }
+}
+
+/* -------- 2. insertItem -------- */
+BPTreeNode* insertItem(BPTreeNode* root, int key) {
+    if (root->keyCount == ORDER - 1) {
+        BPTreeNode* newRoot = createNode(false);
+        newRoot->children[0] = root;
+        splitChild(newRoot, 0, root);
+        int i = (key > newRoot->keys[0]) ? 1 : 0;
+        insertNonFull(newRoot->children[i], key);
+        return newRoot;
+    } else {
+        insertNonFull(root, key);
+        return root;
+    }
+}
+
+/* -------- 3. deleteItem (basic: remove from leaf only) -------- */
+BPTreeNode* deleteItem(BPTreeNode* root, int key) {
+    if (!root) return NULL;
+
+    int i = 0;
+    while (i < root->keyCount && key > root->keys[i]) i++;
+
+    if (root->isLeaf) {
+        if (i < root->keyCount && root->keys[i] == key) {
+            for (int j = i; j < root->keyCount - 1; j++)
+                root->keys[j] = root->keys[j + 1];
+            root->keyCount--;
+        }
+    } else {
+        root->children[i] = deleteItem(root->children[i], key);
+    }
+    return root;
+}
+
+/* -------- 4. deleteTree -------- */
+void deleteTree(BPTreeNode* root) {
+    if (!root) return;
+    if (!root->isLeaf) {
+        for (int i = 0; i <= root->keyCount; i++)
+            deleteTree(root->children[i]);
+    }
+    free(root);
+}
+
+void printLeaves(BPTreeNode* root) {
+    if (!root) return;
+    while (!root->isLeaf) root = root->children[0];
+    while (root) {
+        for (int i = 0; i < root->keyCount; i++)
+            printf("%d ", root->keys[i]);
+        root = root->next;
+    }
+    printf("\n");
+}
+
+int main() {
+    BPTreeNode* root = createTree();
+
+    root = insertItem(root, 10);
+    root = insertItem(root, 20);
+    root = insertItem(root, 5);
+    root = insertItem(root, 6);
+    root = insertItem(root, 12);
+    root = insertItem(root, 30);
+    root = insertItem(root, 7);
+    root = insertItem(root, 17);
+
+    printf("B+ Tree leaf nodes: ");
+    printLeaves(root);
+
+    int idx;
+    BPTreeNode* found = searchItem(root, 6, &idx);
+    printf("Search 6: %s\n", found ? "Found" : "Not Found");
+
+    root = deleteItem(root, 6);
+    printf("After deleting 6: ");
+    printLeaves(root);
+
+    deleteTree(root);
+    return 0;
+}
