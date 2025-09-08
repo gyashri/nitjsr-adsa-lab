@@ -1,0 +1,282 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef enum { RED, BLACK } Color;
+
+typedef struct Node {
+    int key;
+    Color color;
+    struct Node *left, *right, *parent;
+} Node;
+
+Node *NIL;
+Node* createNode(int key) {
+    Node* node = (Node*)malloc(sizeof(Node));
+    node->key = key;
+    node->color = RED;
+    node->left = node->right = node->parent = NIL;
+    return node;
+}
+
+/* --------- Rotations --------- */
+void leftRotate(Node **root, Node *x) {
+    Node *y = x->right;
+    x->right = y->left;
+    if (y->left != NIL) y->left->parent = x;
+
+    y->parent = x->parent;
+    if (x->parent == NIL) *root = y;
+    else if (x == x->parent->left) x->parent->left = y;
+    else x->parent->right = y;
+
+    y->left = x;
+    x->parent = y;
+}
+
+void rightRotate(Node **root, Node *y) {
+    Node *x = y->left;
+    y->left = x->right;
+    if (x->right != NIL) x->right->parent = y;
+
+    x->parent = y->parent;
+    if (y->parent == NIL) *root = x;
+    else if (y == y->parent->right) y->parent->right = x;
+    else y->parent->left = x;
+
+    x->right = y;
+    y->parent = x;
+}
+
+/* --------- Insertion --------- */
+void insertFixup(Node **root, Node *z) {
+    while (z->parent->color == RED) {
+        if (z->parent == z->parent->parent->left) {
+            Node *y = z->parent->parent->right;
+            if (y->color == RED) {
+                z->parent->color = BLACK;
+                y->color = BLACK;
+                z->parent->parent->color = RED;
+                z = z->parent->parent;
+            } else {
+                if (z == z->parent->right) {
+                    z = z->parent;
+                    leftRotate(root, z);
+                }
+                z->parent->color = BLACK;
+                z->parent->parent->color = RED;
+                rightRotate(root, z->parent->parent);
+            }
+        } else {
+            Node *y = z->parent->parent->left;
+            if (y->color == RED) {
+                z->parent->color = BLACK;
+                y->color = BLACK;
+                z->parent->parent->color = RED;
+                z = z->parent->parent;
+            } else {
+                if (z == z->parent->left) {
+                    z = z->parent;
+                    rightRotate(root, z);
+                }
+                z->parent->color = BLACK;
+                z->parent->parent->color = RED;
+                leftRotate(root, z->parent->parent);
+            }
+        }
+    }
+    (*root)->color = BLACK;
+}
+
+void insertItem(Node **root, int key) {
+    Node *z = createNode(key);
+    Node *y = NIL;
+    Node *x = *root;
+
+    while (x != NIL) {
+        y = x;
+        if (z->key < x->key) x = x->left;
+        else if (z->key > x->key) x = x->right;
+        else return; // duplicates not allowed
+    }
+
+    z->parent = y;
+    if (y == NIL) *root = z;
+    else if (z->key < y->key) y->left = z;
+    else y->right = z;
+
+    insertFixup(root, z);
+}
+
+/* --------- Deletion --------- */
+Node* treeMinimum(Node *x) {
+    while (x->left != NIL) x = x->left;
+    return x;
+}
+
+void deleteFixup(Node **root, Node *x) {
+    while (x != *root && x->color == BLACK) {
+        if (x == x->parent->left) {
+            Node *w = x->parent->right;
+            if (w->color == RED) {
+                w->color = BLACK;
+                x->parent->color = RED;
+                leftRotate(root, x->parent);
+                w = x->parent->right;
+            }
+            if (w->left->color == BLACK && w->right->color == BLACK) {
+                w->color = RED;
+                x = x->parent;
+            } else {
+                if (w->right->color == BLACK) {
+                    w->left->color = BLACK;
+                    w->color = RED;
+                    rightRotate(root, w);
+                    w = x->parent->right;
+                }
+                w->color = x->parent->color;
+                x->parent->color = BLACK;
+                w->right->color = BLACK;
+                leftRotate(root, x->parent);
+                x = *root;
+            }
+        } else {
+            Node *w = x->parent->left;
+            if (w->color == RED) {
+                w->color = BLACK;
+                x->parent->color = RED;
+                rightRotate(root, x->parent);
+                w = x->parent->left;
+            }
+            if (w->right->color == BLACK && w->left->color == BLACK) {
+                w->color = RED;
+                x = x->parent;
+            } else {
+                if (w->left->color == BLACK) {
+                    w->right->color = BLACK;
+                    w->color = RED;
+                    leftRotate(root, w);
+                    w = x->parent->left;
+                }
+                w->color = x->parent->color;
+                x->parent->color = BLACK;
+                w->left->color = BLACK;
+                rightRotate(root, x->parent);
+                x = *root;
+            }
+        }
+    }
+    x->color = BLACK;
+}
+
+void deleteItem(Node **root, int key) {
+    Node *z = *root;
+    while (z != NIL) {
+        if (z->key == key) break;
+        else if (key < z->key) z = z->left;
+        else z = z->right;
+    }
+    if (z == NIL) return;
+
+    Node *y = z;
+    Node *x;
+    Color yOriginalColor = y->color;
+
+    if (z->left == NIL) {
+        x = z->right;
+        if (z->parent == NIL) *root = z->right;
+        else if (z == z->parent->left) z->parent->left = z->right;
+        else z->parent->right = z->right;
+        x->parent = z->parent;
+    } else if (z->right == NIL) {
+        x = z->left;
+        if (z->parent == NIL) *root = z->left;
+        else if (z == z->parent->left) z->parent->left = z->left;
+        else z->parent->right = z->left;
+        x->parent = z->parent;
+    } else {
+        y = treeMinimum(z->right);
+        yOriginalColor = y->color;
+        x = y->right;
+        if (y->parent == z) x->parent = y;
+        else {
+            if (y->parent != NIL) {
+                if (y == y->parent->left) y->parent->left = y->right;
+                else y->parent->right = y->right;
+            }
+            y->right = z->right;
+            y->right->parent = y;
+        }
+        if (z->parent == NIL) *root = y;
+        else if (z == z->parent->left) z->parent->left = y;
+        else z->parent->right = y;
+        y->parent = z->parent;
+        y->left = z->left;
+        y->left->parent = y;
+        y->color = z->color;
+    }
+
+    free(z);
+    if (yOriginalColor == BLACK) deleteFixup(root, x);
+}
+
+/* --------- Search --------- */
+Node* searchItem(Node *root, int key) {
+    while (root != NIL && root->key != key) {
+        if (key < root->key) root = root->left;
+        else root = root->right;
+    }
+    return (root == NIL) ? NULL : root;
+}
+
+/* --------- Delete Tree --------- */
+void deleteTree(Node *root) {
+    if (root == NIL) return;
+    deleteTree(root->left);
+    deleteTree(root->right);
+    free(root);
+}
+
+/* --------- Create Tree --------- */
+Node* createTree() {
+    return NIL;
+}
+
+/* --------- Utility Print (Inorder) --------- */
+void inorder(Node *root) {
+    if (root != NIL) {
+        inorder(root->left);
+        printf("%d(%s) ", root->key, root->color == RED ? "R" : "B");
+        inorder(root->right);
+    }
+}
+
+int main() {
+    /* Initialize NIL node */
+    NIL = (Node*)malloc(sizeof(Node));
+    NIL->color = BLACK;
+    NIL->left = NIL->right = NIL->parent = NIL;
+
+    Node *root = createTree();
+
+    insertItem(&root, 10);
+    insertItem(&root, 20);
+    insertItem(&root, 30);
+    insertItem(&root, 15);
+    insertItem(&root, 25);
+
+    printf("Inorder traversal: ");
+    inorder(root);
+    printf("\n");
+
+    deleteItem(&root, 20);
+    printf("After deleting 20: ");
+    inorder(root);
+    printf("\n");
+
+    Node *found = searchItem(root, 25);
+    printf("Search 25: %s\n", found ? "Found" : "Not Found");
+
+    deleteTree(root);
+    free(NIL);
+    return 0;
+}
